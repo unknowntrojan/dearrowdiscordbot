@@ -14,6 +14,4 @@ Register a Discord application on the Discord developer portal.
 
 It requires the following permissions: `Attach Files, Embed Links, Read Message History, Send Messages, View Channels`.
 
-Get the Bot Token, place it in a file under `src/token`. It will be hardcoded into the binary.
-
 It is now 6am, this is super half baked, lmao
