@@ -14,3 +14,4 @@ reqwest = { version = "0.11.27", features = ["json"] }
 serde = { version = "1", features = ["derive"] }
 anyhow = "1"
 regex = "1.11"
+clap = { version = "*", features = ["derive", "env"] }

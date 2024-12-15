@@ -1,5 +1,8 @@
 #![allow(unused)]
 
+use std::str::FromStr;
+
+use clap::{Parser, ValueEnum};
 use futures::StreamExt;
 use regex::Regex;
 use serenity::all::{
@@ -10,15 +13,31 @@ use serenity::async_trait;
 use serenity::model::channel::Message;
 use serenity::prelude::*;
 
-#[derive(PartialEq)]
+#[derive(PartialEq, Clone, Copy, Debug)]
 enum ThumbnailMode {
     Disabled,
     Enabled,
     OnlyLocked,
 }
 
-const REMOVE_ORIGINAL: bool = false;
-const THUMBNAIL_MODE: ThumbnailMode = ThumbnailMode::Enabled;
+impl ToString for ThumbnailMode {
+    fn to_string(&self) -> String {
+        format!("{:?}", self)
+    }
+}
+
+impl FromStr for ThumbnailMode {
+    type Err = anyhow::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_ascii_lowercase().as_str() {
+            "disabled" => Ok(ThumbnailMode::Disabled),
+            "enabled" => Ok(ThumbnailMode::Enabled),
+            "onlylocked" => Ok(ThumbnailMode::OnlyLocked),
+            _ => Err(anyhow::anyhow!("can't parse thumbnail mode")),
+        }
+    }
+}
 
 #[derive(serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -82,7 +101,10 @@ async fn get_branding(vid_id: &str) -> anyhow::Result<BrandingResponse> {
     Ok(res)
 }
 
-struct Handler;
+struct Handler {
+    remove_embed: bool,
+    thumbnail_mode: ThumbnailMode,
+}
 
 #[async_trait]
 impl EventHandler for Handler {
@@ -143,7 +165,7 @@ impl EventHandler for Handler {
         //     return;
         // }
 
-        let thumb = if THUMBNAIL_MODE != ThumbnailMode::Disabled {
+        let thumb = if self.thumbnail_mode != ThumbnailMode::Disabled {
             match branding.thumbnails.first() {
                 Some(thumbnail) => {
                     if !thumbnail.locked && thumbnail.votes < 0 {
@@ -153,7 +175,8 @@ impl EventHandler for Handler {
                             title.votes
                         );
                         None
-                    } else if !thumbnail.locked && THUMBNAIL_MODE == ThumbnailMode::OnlyLocked {
+                    } else if !thumbnail.locked && self.thumbnail_mode == ThumbnailMode::OnlyLocked
+                    {
                         log::warn!("only locked thumbnails allowed.");
 
                         None
@@ -203,7 +226,7 @@ impl EventHandler for Handler {
                         "Title: {} votes, is{}locked; Thumbnail: {}",
                         title.votes,
                         if title.locked { " " } else { " not " },
-                        match THUMBNAIL_MODE {
+                        match self.thumbnail_mode {
                             ThumbnailMode::Disabled => "disabled by dev",
                             ThumbnailMode::Enabled => "not found",
                             ThumbnailMode::OnlyLocked => "disabled by dev (lock-only)",
@@ -222,7 +245,7 @@ impl EventHandler for Handler {
             log::error!("could not send message: {e:#?}");
         }
 
-        if THUMBNAIL_MODE != ThumbnailMode::Disabled && thumb_present && REMOVE_ORIGINAL {
+        if self.thumbnail_mode != ThumbnailMode::Disabled && thumb_present && self.remove_embed {
             if msg.embeds.len() == 0 {
                 log::info!("waiting for discord to embed the video!");
                 let msg_id = msg.id;
@@ -252,6 +275,21 @@ impl EventHandler for Handler {
     }
 }
 
+#[derive(Parser)]
+struct Args {
+    #[arg(long, env)]
+    /// The discord token for the bot
+    token: String,
+
+    #[arg(long, env, default_value_t = ThumbnailMode::OnlyLocked)]
+    /// The Thumbnail Mode. Indicates whether or not thumbnails should be embedded. "Locked" here refers to a crowd-sourced thumbnail having reached consensus status.
+    thumbnail_mode: ThumbnailMode,
+
+    #[arg(long, env)]
+    /// Whether to remove the original embed from the sender.
+    remove_embed: bool,
+}
+
 #[tokio::main]
 async fn main() {
     colog::default_builder()
@@ -263,14 +301,24 @@ async fn main() {
         .filter_level(log::LevelFilter::Info)
         .init();
 
-    let token = include_str!("token");
+    #[cfg(debug_assertions)]
+    {
+        let token = include_str!("token");
+        // wtf lmao why is this unsafe
+        unsafe { std::env::set_var("TOKEN", token) };
+    }
+
+    let args = Args::parse();
 
     let intents = GatewayIntents::GUILD_MESSAGES | GatewayIntents::MESSAGE_CONTENT;
 
     log::info!("creating client");
 
-    let mut client = Client::builder(&token, intents)
-        .event_handler(Handler)
+    let mut client = Client::builder(&args.token, intents)
+        .event_handler(Handler {
+            remove_embed: args.remove_embed,
+            thumbnail_mode: args.thumbnail_mode,
+        })
         .await
         .expect("failed to create client");
 
