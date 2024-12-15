@@ -1,6 +1,6 @@
 # DeArrow Discord Bot
 
-This discord bot uses the DeArrow API to de-clickbait YouTube videos sent in discord chats.
+This Discord bot uses the DeArrow API to de-clickbait YouTube videos sent in Discord chats.
 
 ## Example
 
@@ -10,8 +10,10 @@ This discord bot uses the DeArrow API to de-clickbait YouTube videos sent in dis
 
 Since this was a 2 hour quickie project, it is very simple and not very configurable.
 
-Register a discord application on the discord developer portal.
+Register a Discord application on the Discord developer portal.
 
-It requires the following permissions: Attach Files, Embed Links, Read Message History, Send Messages, View Channels.
+It requires the following permissions: `Attach Files, Embed Links, Read Message History, Send Messages, View Channels`.
 
 Get the Bot Token, place it in a file under `src/token`. It will be hardcoded into the binary.
+
+It is now 6am, this is super half baked, lmao
