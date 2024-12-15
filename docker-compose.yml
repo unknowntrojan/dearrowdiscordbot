@@ -1,0 +1,12 @@
+version: '3.9'
+
+services:
+  bot:
+    build: .
+    container_name: dearrowbot
+    restart: unless-stopped
+
+    environment:
+      REMOVE_EMBEDS: false
+      THUMBNAIL_MODE: ONLYLOCKED
+      TOKEN: ${DEARROW_BOT_TOKEN}
