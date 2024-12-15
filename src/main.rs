@@ -126,7 +126,7 @@ impl EventHandler for Handler {
         let link = msg.content_safe(ctx.cache);
 
         let Some(cap) = regex.captures(&link) else {
-            log::warn!("regex did not capture");
+            // log::warn!("regex did not capture");
             return;
         };
 
