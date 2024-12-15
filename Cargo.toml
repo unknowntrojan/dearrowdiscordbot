@@ -5,7 +5,7 @@ edition = "2024"
 authors = ["unknowntrojan"]
 
 [dependencies]
-serenity = { version = "0.12", features = ["simd_json"] }
+serenity = { version = "0.12", features = ["simd_json", "collector"] }
 tokio = { version = "1.42", features = ["macros", "rt-multi-thread"] }
 futures = { version = "0.3" }
 log = { version = "0.4" }

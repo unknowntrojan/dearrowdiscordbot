@@ -1,8 +1,10 @@
 #![allow(unused)]
 
+use futures::StreamExt;
 use regex::Regex;
 use serenity::all::{
-    CreateAttachment, CreateEmbed, CreateEmbedFooter, CreateMessage, MessageUpdateEvent,
+    CreateAttachment, CreateEmbed, CreateEmbedFooter, CreateMessage, EditMessage, Event,
+    MessageUpdateEvent,
 };
 use serenity::async_trait;
 use serenity::model::channel::Message;
@@ -15,7 +17,8 @@ enum ThumbnailMode {
     OnlyLocked,
 }
 
-const THUMBNAIL_MODE: ThumbnailMode = ThumbnailMode::OnlyLocked;
+const REMOVE_ORIGINAL: bool = false;
+const THUMBNAIL_MODE: ThumbnailMode = ThumbnailMode::Enabled;
 
 #[derive(serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -93,7 +96,7 @@ impl EventHandler for Handler {
         log::info!("MessageUpdateEvent");
     }
 
-    async fn message(&self, ctx: Context, msg: Message) {
+    async fn message(&self, ctx: Context, mut msg: Message) {
         let regex =
             Regex::new(r#"(?:youtube(?:-nocookie)?\.com\/(?:[^\/\n\s]+\/\S+\/|(?:v|e(?:mbed)?)\/|\S*?[?&]v=)|youtu\.be\/)([a-zA-Z0-9_-]{11})"#)
                 .expect("failed to compile regex");
@@ -101,7 +104,7 @@ impl EventHandler for Handler {
         let link = msg.content_safe(ctx.cache);
 
         let Some(cap) = regex.captures(&link) else {
-            log::error!("regex did not capture");
+            log::warn!("regex did not capture");
             return;
         };
 
@@ -135,7 +138,12 @@ impl EventHandler for Handler {
             return;
         }
 
-        let thumb = if THUMBNAIL_MODE == ThumbnailMode::Disabled {
+        // if title.original {
+        //     log::warn!("title is just recapitalized, skipping.");
+        //     return;
+        // }
+
+        let thumb = if THUMBNAIL_MODE != ThumbnailMode::Disabled {
             match branding.thumbnails.first() {
                 Some(thumbnail) => {
                     if !thumbnail.locked && thumbnail.votes < 0 {
@@ -167,6 +175,8 @@ impl EventHandler for Handler {
         };
 
         let message = CreateMessage::new();
+
+        let thumb_present = thumb.is_some();
 
         let message = match thumb {
             Some((thumb, votes, locked)) => message
@@ -210,6 +220,34 @@ impl EventHandler for Handler {
 
         if let Err(e) = msg.channel_id.send_message(&ctx.http, message).await {
             log::error!("could not send message: {e:#?}");
+        }
+
+        if THUMBNAIL_MODE != ThumbnailMode::Disabled && thumb_present && REMOVE_ORIGINAL {
+            if msg.embeds.len() == 0 {
+                log::info!("waiting for discord to embed the video!");
+                let msg_id = msg.id;
+
+                let mut message_updates =
+                    serenity::collector::collect(&ctx.shard, move |ev| match ev {
+                        Event::MessageUpdate(x) if x.id == msg_id => Some(()),
+                        _ => None,
+                    });
+
+                let _ = tokio::time::timeout(
+                    std::time::Duration::from_millis(5000),
+                    message_updates.next(),
+                )
+                .await;
+            }
+
+            log::info!("editing message to remove original embed!");
+
+            if let Err(e) = msg
+                .edit(&ctx.http, EditMessage::new().suppress_embeds(true))
+                .await
+            {
+                log::error!("unable to edit sent message: {e:#?}");
+            }
         }
     }
 }
