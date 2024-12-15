@@ -7,6 +7,6 @@ services:
     restart: unless-stopped
 
     environment:
-      REMOVE_EMBEDS: false
+      REMOVE_EMBEDS: "false"
       THUMBNAIL_MODE: ONLYLOCKED
       TOKEN: ${DEARROW_BOT_TOKEN}
