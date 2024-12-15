@@ -8,6 +8,15 @@ use serenity::async_trait;
 use serenity::model::channel::Message;
 use serenity::prelude::*;
 
+#[derive(PartialEq)]
+enum ThumbnailMode {
+    Disabled,
+    Enabled,
+    OnlyLocked,
+}
+
+const THUMBNAIL_MODE: ThumbnailMode = ThumbnailMode::OnlyLocked;
+
 #[derive(serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct BrandingTitle {
@@ -126,27 +135,35 @@ impl EventHandler for Handler {
             return;
         }
 
-        let thumb = match branding.thumbnails.first() {
-            Some(thumbnail) => {
-                if !thumbnail.locked && thumbnail.votes < 0 {
-                    log::warn!(
-                        "untrusted thumbnail (locked: {}, votes: {}). skipping.",
-                        title.locked,
-                        title.votes
-                    );
+        let thumb = if THUMBNAIL_MODE == ThumbnailMode::Disabled {
+            match branding.thumbnails.first() {
+                Some(thumbnail) => {
+                    if !thumbnail.locked && thumbnail.votes < 0 {
+                        log::warn!(
+                            "untrusted thumbnail (locked: {}, votes: {}). skipping.",
+                            title.locked,
+                            title.votes
+                        );
+                        None
+                    } else if !thumbnail.locked && THUMBNAIL_MODE == ThumbnailMode::OnlyLocked {
+                        log::warn!("only locked thumbnails allowed.");
+
+                        None
+                    } else {
+                        get_thumbnail(&id, thumbnail.timestamp)
+                            .await
+                            .map_err(|e| log::error!("failed to retrieve thumbnail: {e:#?}"))
+                            .ok()
+                            .map(|x| (x, thumbnail.votes, thumbnail.locked))
+                    }
+                }
+                None => {
+                    log::warn!("no thumbnails returned!");
                     None
-                } else {
-                    get_thumbnail(&id, thumbnail.timestamp)
-                        .await
-                        .map_err(|e| log::error!("failed to retrieve thumbnail: {e:#?}"))
-                        .ok()
-                        .map(|x| (x, thumbnail.votes, thumbnail.locked))
                 }
             }
-            None => {
-                log::warn!("no thumbnails returned!");
-                None
-            }
+        } else {
+            None
         };
 
         let message = CreateMessage::new();
@@ -173,9 +190,14 @@ impl EventHandler for Handler {
                 CreateEmbed::new()
                     .title(&title.title)
                     .description(&format!(
-                        "Title: {} votes, is{}locked; Thumbnail: not found",
+                        "Title: {} votes, is{}locked; Thumbnail: {}",
                         title.votes,
-                        if title.locked { " " } else { " not " }
+                        if title.locked { " " } else { " not " },
+                        match THUMBNAIL_MODE {
+                            ThumbnailMode::Disabled => "disabled by dev",
+                            ThumbnailMode::Enabled => "not found",
+                            ThumbnailMode::OnlyLocked => "disabled by dev (lock-only)",
+                        }
                     ))
                     .footer(CreateEmbedFooter::new(
                         "De-Clickbait provided by DeArrow API.",
@@ -183,6 +205,8 @@ impl EventHandler for Handler {
             ),
         }
         .reference_message(&msg);
+
+        log::info!("Successfully generated de-clickbaited embed for {id}!");
 
         if let Err(e) = msg.channel_id.send_message(&ctx.http, message).await {
             log::error!("could not send message: {e:#?}");
@@ -193,8 +217,13 @@ impl EventHandler for Handler {
 #[tokio::main]
 async fn main() {
     colog::default_builder()
+        .default_format()
+        .filter(Some("serenity"), log::LevelFilter::Warn)
+        .filter(Some("serenity"), log::LevelFilter::Warn)
+        .filter(Some("serenity"), log::LevelFilter::Warn)
+        .filter(Some("tracing::span"), log::LevelFilter::Warn)
         .filter_level(log::LevelFilter::Info)
-        .build();
+        .init();
 
     let token = include_str!("token");
 
