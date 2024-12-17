@@ -108,16 +108,6 @@ struct Handler {
 
 #[async_trait]
 impl EventHandler for Handler {
-    async fn message_update(
-        &self,
-        ctx: Context,
-        old: Option<Message>,
-        new: Option<Message>,
-        event: MessageUpdateEvent,
-    ) {
-        log::info!("MessageUpdateEvent");
-    }
-
     async fn message(&self, ctx: Context, mut msg: Message) {
         let regex =
             Regex::new(r#"(?:youtube(?:-nocookie)?\.com\/(?:[^\/\n\s]+\/\S+\/|(?:v|e(?:mbed)?)\/|\S*?[?&]v=)|youtu\.be\/)([a-zA-Z0-9_-]{11})"#)
