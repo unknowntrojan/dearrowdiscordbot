@@ -141,7 +141,7 @@ impl EventHandler for Handler {
             return;
         };
 
-        if !title.locked && title.votes < 0 {
+        if !title.locked && title.votes < 2 {
             log::warn!(
                 "untrusted branding (locked: {}, votes: {}). skipping.",
                 title.locked,
@@ -311,6 +311,10 @@ async fn main() {
         })
         .await
         .expect("failed to create client");
+
+    log::info!("DeArrowDiscordBot starting now!");
+    log::info!("Thumbnail Mode: {:?}", args.thumbnail_mode);
+    log::info!("Remove Embeds after Declickbaiting? {}", args.remove_embed);
 
     if let Err(e) = client.start().await {
         log::error!("{e:?}");
