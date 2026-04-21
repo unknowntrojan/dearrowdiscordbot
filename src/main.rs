@@ -180,7 +180,8 @@ impl EventHandler for Handler {
         //     return;
         // }
 
-        let override_thumb = msg_with_link.content.contains("DeArrow:force_thumbnail");
+        let override_thumb = msg.content.contains("DeArrow:force_thumbnail")
+            || msg_with_link.content.contains("DeArrow:force_thumbnail");
 
         let thumb = if self.thumbnail_mode != ThumbnailMode::Disabled || override_thumb {
             match branding.thumbnails.first() {
