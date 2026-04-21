@@ -123,8 +123,13 @@ impl EventHandler for Handler {
                 // // make it so that if the reply is to a message by us we override all limits and redo it
                 if x.author.id == bot_id {
                     //     // the reffed msg was ours.
+                    log::warn!("reffed msg was ours, but this path is not implemented yet.")
                 } else {
+                    log::info!(
+                        "overriding link to the message replied to by the message that @ed us"
+                    );
                     msg_with_link = x.clone();
+                    bypass_checks = true;
                 }
             }
         }
