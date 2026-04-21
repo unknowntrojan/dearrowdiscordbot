@@ -13,6 +13,9 @@ use serenity::async_trait;
 use serenity::model::channel::Message;
 use serenity::prelude::*;
 
+// TODO: command to force a title response
+// TODO: command to ask for reason of nonaction
+
 #[derive(PartialEq, Clone, Copy, Debug)]
 enum ThumbnailMode {
     Disabled,
@@ -109,11 +112,28 @@ struct Handler {
 #[async_trait]
 impl EventHandler for Handler {
     async fn message(&self, ctx: Context, mut msg: Message) {
+        let bot_id = ctx.cache.current_user().id;
+        let mut msg_with_link = Box::new(msg.clone());
+        let mut bypass_checks = false;
+        if let Ok(x) = msg.mentions_me(&ctx.http).await
+            && x
+        {
+            // probably wants to force
+            if let Some(ref x) = msg.referenced_message {
+                // // make it so that if the reply is to a message by us we override all limits and redo it
+                if x.author.id == bot_id {
+                    //     // the reffed msg was ours.
+                } else {
+                    msg_with_link = x.clone();
+                }
+            }
+        }
+
         let regex =
             Regex::new(r#"(?:youtube(?:-nocookie)?\.com\/(?:[^\/\n\s]+\/\S+\/|(?:v|e(?:mbed)?)\/|\S*?[?&]v=)|youtu\.be\/)([a-zA-Z0-9_-]{11})"#)
                 .expect("failed to compile regex");
 
-        let link = msg.content_safe(ctx.cache);
+        let link = msg_with_link.content_safe(ctx.cache);
 
         let Some(cap) = regex.captures(&link) else {
             // log::warn!("regex did not capture");
@@ -141,7 +161,7 @@ impl EventHandler for Handler {
             return;
         };
 
-        if !title.locked && title.votes < 2 {
+        if !bypass_checks && (!title.locked && title.votes < 2) {
             log::warn!(
                 "untrusted branding (locked: {}, votes: {}). skipping.",
                 title.locked,
@@ -155,17 +175,20 @@ impl EventHandler for Handler {
         //     return;
         // }
 
-        let thumb = if self.thumbnail_mode != ThumbnailMode::Disabled {
+        let override_thumb = msg_with_link.content.contains("DeArrow:force_thumbnail");
+
+        let thumb = if self.thumbnail_mode != ThumbnailMode::Disabled || override_thumb {
             match branding.thumbnails.first() {
                 Some(thumbnail) => {
-                    if !thumbnail.locked && thumbnail.votes < 0 {
+                    if !override_thumb && (!thumbnail.locked && thumbnail.votes < 0) {
                         log::warn!(
                             "untrusted thumbnail (locked: {}, votes: {}). skipping.",
                             title.locked,
                             title.votes
                         );
                         None
-                    } else if !thumbnail.locked && self.thumbnail_mode == ThumbnailMode::OnlyLocked
+                    } else if !override_thumb
+                        && (!thumbnail.locked && self.thumbnail_mode == ThumbnailMode::OnlyLocked)
                     {
                         log::warn!("only locked thumbnails allowed.");
 
@@ -238,7 +261,7 @@ impl EventHandler for Handler {
         if self.thumbnail_mode != ThumbnailMode::Disabled && thumb_present && self.remove_embed {
             if msg.embeds.len() == 0 {
                 log::info!("waiting for discord to embed the video!");
-                let msg_id = msg.id;
+                let msg_id = msg.id.clone();
 
                 let mut message_updates =
                     serenity::collector::collect(&ctx.shard, move |ev| match ev {

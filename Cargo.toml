@@ -1,16 +1,16 @@
 [package]
 name = "dearrowdiscordbot"
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
 authors = ["unknowntrojan"]
 
 [dependencies]
 serenity = { version = "0.12", features = ["simd_json", "collector"] }
-tokio = { version = "1.42", features = ["macros", "rt-multi-thread"] }
+tokio = { version = "1.52", features = ["macros", "rt-multi-thread"] }
 futures = { version = "0.3" }
 log = { version = "0.4" }
 colog = "1.3"
-reqwest = { version = "0.11.27", features = [
+reqwest = { version = "0.13", features = [
 	"json",
 	"rustls",
 ], default-features = false }
